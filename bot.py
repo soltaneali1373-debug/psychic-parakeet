@@ -134,6 +134,106 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+
+def join_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📢 عضویت در مراغه آنلاین",
+                    url=CHANNEL_URL,
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="✅ عضو شدم",
+                    callback_data="check_join",
+                )
+            ],
+        ]
+    )
+
+
+async def is_member(user_id: int) -> bool:
+    try:
+        member = await bot.get_chat_member(
+            chat_id=CHANNEL,
+            user_id=user_id,
+        )
+
+        if member.status in {"member", "administrator", "creator"}:
+            return True
+
+        if member.status == "restricted":
+            return bool(getattr(member, "is_member", False))
+
+        return False
+
+    except Exception:
+        logging.exception("Membership check failed")
+        return False
+
+
+async def show_gate(target) -> None:
+    text = (
+        "📰 <b>مراغه آنلاین</b>\n\n"
+        "برای استفاده از ربات، ابتدا عضو کانال مراغه آنلاین شوید.\n\n"
+        "پس از عضویت، روی «عضو شدم» بزنید."
+    )
+
+    if isinstance(target, Message):
+        await target.answer(
+            text,
+            reply_markup=join_keyboard(),
+        )
+    else:
+        await target.message.edit_text(
+            text,
+            reply_markup=join_keyboard(),
+        )
+
+
+@dp.message(CommandStart())
+async def start(message: Message) -> None:
+    if not message.from_user:
+        return
+
+    if await is_member(message.from_user.id):
+        await message.answer(
+            "✅ عضویت شما تأیید شد.\n\n"
+            "به ربات مراغه آنلاین خوش آمدید.\n"
+            "خدمات ربات را می‌توانید از منوی پایین دریافت کنید."
+        )
+    else:
+        await show_gate(message)
+
+
+@dp.callback_query(F.data == "check_join")
+async def check_join(callback: CallbackQuery) -> None:
+    if await is_member(callback.from_user.id):
+        await callback.answer("عضویت تأیید شد ✅")
+
+        if callback.message:
+            await callback.message.edit_text(
+                "✅ <b>عضویت شما تأیید شد.</b>\n\n"
+                "به ربات مراغه آنلاین خوش آمدید.\n"
+                "از اینجا می‌توانید خدمات ربات را دریافت کنید."
+            )
+    else:
+        await callback.answer(
+            "هنوز عضویت شما تأیید نشده است. ابتدا عضو کانال شوید.",
+            show_alert=True,
+        )
+
+
+async def main() -> None:
+    await bot.delete_webhook(drop_pending_updates=True)
+    await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
 import os
 import asyncio
 import logging
